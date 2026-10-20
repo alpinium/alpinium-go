@@ -1,0 +1,42 @@
+name: Release
+on:
+  push:
+    tags:
+      - "*/v[0-9]+.[0-9]+.[0-9]+*"
+permissions:
+  contents: write
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    env:
+      GOWORK: "off"
+      TAG: ${{ github.ref_name }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: Rozebrat a zkontrolovat tag
+        run: |
+          MODULE_DIR="${TAG%/*}"
+          VERSION="${TAG##*/}"
+          [[ "$VERSION" =~ ^v[0-9]+\.[0-9]+\.[0-9]+(-[0-9A-Za-z.]+)?$ ]] || { echo "Neplatná verze v tagu $TAG"; exit 1; }
+          [ -f "$MODULE_DIR/go.mod" ] || { echo "Složka $MODULE_DIR s go.mod neexistuje"; exit 1; }
+          git merge-base --is-ancestor "$GITHUB_SHA" origin/main || { echo "Tag $TAG není na větvi main"; exit 1; }
+          echo "MODULE_DIR=$MODULE_DIR" >> "$GITHUB_ENV"
+          echo "VERSION=$VERSION" >> "$GITHUB_ENV"
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: ${{ env.MODULE_DIR }}/go.mod
+      - run: go vet ./... && go test -race -count=1 ./... && go mod tidy -diff
+        working-directory: ${{ env.MODULE_DIR }}
+      - name: GitHub Release
+        run: |
+          PRERELEASE=false
+          if [[ "$VERSION" == v0.* || "$VERSION" == *-* ]]; then PRERELEASE=true; fi
+          gh release create "$TAG" --verify-tag --generate-notes --prerelease="$PRERELEASE"
+        env:
+          GH_TOKEN: ${{ github.token }}
+      - name: Zahřát Go proxy
+        run: |
+          MODULE=$(awk '/^module/ {print $2}' "$MODULE_DIR/go.mod")
+          GOPROXY=https://proxy.golang.org go list -m "$MODULE@$VERSION"
