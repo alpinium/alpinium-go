@@ -1,15 +1,17 @@
 package Cast
 
 import (
+    "errors"
     "math"
     "math/big"
     "reflect"
     "strconv"
     "testing"
+    "time"
 )
 
 type integer interface {
-    ~uint | ~uint8 | ~uint16 | ~uint32 | ~uint64 | ~int | ~int8 | ~int16 | ~int32 | ~int64
+    ~uint | ~uint8 | ~uint16 | ~uint32 | ~uint64 | ~uintptr | ~int | ~int8 | ~int16 | ~int32 | ~int64
 }
 
 type float interface {
@@ -18,7 +20,7 @@ type float interface {
 
 func isUnsigned(kind reflect.Kind) bool {
     switch kind {
-    case reflect.Uint, reflect.Uint8, reflect.Uint16, reflect.Uint32, reflect.Uint64:
+    case reflect.Uint, reflect.Uint8, reflect.Uint16, reflect.Uint32, reflect.Uint64, reflect.Uintptr:
         return true
     }
     return false
@@ -235,6 +237,7 @@ func testIntegerCastFrom[T integer](t *testing.T) {
     t.Run("to uint16", testIntegerCast[T, uint16])
     t.Run("to uint32", testIntegerCast[T, uint32])
     t.Run("to uint64", testIntegerCast[T, uint64])
+    t.Run("to uintptr", testIntegerCast[T, uintptr])
     t.Run("to int", testIntegerCast[T, int])
     t.Run("to int8", testIntegerCast[T, int8])
     t.Run("to int16", testIntegerCast[T, int16])
@@ -259,6 +262,9 @@ func TestCastIntegerFromUint32(t *testing.T) {
 func TestCastIntegerFromUint64(t *testing.T) {
     testIntegerCastFrom[uint64](t)
 }
+func TestCastIntegerFromUintptr(t *testing.T) {
+    testIntegerCastFrom[uintptr](t)
+}
 func TestCastIntegerFromInt(t *testing.T) {
     testIntegerCastFrom[int](t)
 }
@@ -281,6 +287,7 @@ func testFloatCastFrom[T float](t *testing.T) {
     t.Run("to uint16", testFloatToIntegerCast[T, uint16])
     t.Run("to uint32", testFloatToIntegerCast[T, uint32])
     t.Run("to uint64", testFloatToIntegerCast[T, uint64])
+    t.Run("to uintptr", testFloatToIntegerCast[T, uintptr])
     t.Run("to int", testFloatToIntegerCast[T, int])
     t.Run("to int8", testFloatToIntegerCast[T, int8])
     t.Run("to int16", testFloatToIntegerCast[T, int16])
@@ -320,6 +327,7 @@ func TestCastBoolTo(t *testing.T) {
     t.Run("to uint16", testBoolToNumber[uint16])
     t.Run("to uint32", testBoolToNumber[uint32])
     t.Run("to uint64", testBoolToNumber[uint64])
+    t.Run("to uintptr", testBoolToNumber[uintptr])
     t.Run("to int", testBoolToNumber[int])
     t.Run("to int8", testBoolToNumber[int8])
     t.Run("to int16", testBoolToNumber[int16])
@@ -379,6 +387,7 @@ func TestCastNumberToBool(t *testing.T) {
     t.Run("from uint16", testIntegerToBool[uint16])
     t.Run("from uint32", testIntegerToBool[uint32])
     t.Run("from uint64", testIntegerToBool[uint64])
+    t.Run("from uintptr", testIntegerToBool[uintptr])
     t.Run("from int", testIntegerToBool[int])
     t.Run("from int8", testIntegerToBool[int8])
     t.Run("from int16", testIntegerToBool[int16])
@@ -412,7 +421,7 @@ func testFloatToString[T float](t *testing.T) {
 
     for _, pattern := range test_float_patterns {
         source := T(pattern)
-        assumed_result := strconv.FormatFloat(float64(source), 'G', -1, bits)
+        assumed_result := strconv.FormatFloat(float64(source), 'g', -1, bits)
         if result, err := Cast[T, string](source); err != nil || result != assumed_result {
             t.Errorf("Cast[%T, string](%v): expected %q, got %q, error %v", T(0), source, assumed_result, result, err)
         }
@@ -425,6 +434,7 @@ func TestCastNumberToString(t *testing.T) {
     t.Run("from uint16", testIntegerToString[uint16])
     t.Run("from uint32", testIntegerToString[uint32])
     t.Run("from uint64", testIntegerToString[uint64])
+    t.Run("from uintptr", testIntegerToString[uintptr])
     t.Run("from int", testIntegerToString[int])
     t.Run("from int8", testIntegerToString[int8])
     t.Run("from int16", testIntegerToString[int16])
@@ -545,6 +555,7 @@ func TestCastStringToNumber(t *testing.T) {
     t.Run("to uint16", testStringToInteger[uint16])
     t.Run("to uint32", testStringToInteger[uint32])
     t.Run("to uint64", testStringToInteger[uint64])
+    t.Run("to uintptr", testStringToInteger[uintptr])
     t.Run("to int", testStringToInteger[int])
     t.Run("to int8", testStringToInteger[int8])
     t.Run("to int16", testStringToInteger[int16])
@@ -572,58 +583,23 @@ func TestParseScalar(t *testing.T) {
         {"1.5", 1.5}, {"1e3", 1000.0},
         {"true", true}, {"False", false}, {"t", true},
     } {
-        value := any(test.text)
-        if !ParseScalar(&value) || value != test.assumed {
-            t.Errorf("ParseScalar(%q): got %v (%T), expected %v (%T)", test.text, value, value, test.assumed, test.assumed)
+        if result, ok := ParseScalar(test.text); !ok || result != test.assumed {
+            t.Errorf("ParseScalar(%q): got %v (%T), %v, expected %v (%T)", test.text, result, result, ok, test.assumed, test.assumed)
         }
     }
 
-    // Text that is not a scalar stays unchanged and is reported as not parsed.
+    // Text that is not a scalar is reported as not parsed.
     for _, text := range []string{"", "abc", "1,5", "0x10", " 1"} {
-        value := any(text)
-        if ParseScalar(&value) || value != any(text) {
-            t.Errorf("ParseScalar(%q): expected false and unchanged value, got %v (%T)", text, value, value)
+        if result, ok := ParseScalar(text); ok || result != nil {
+            t.Errorf("ParseScalar(%q): expected nil, false, got %v (%T), %v", text, result, result, ok)
         }
     }
 
-    // Not a string at all.
-    for _, original := range []any{1, 1.5, true, nil} {
-        value := original
-        if ParseScalar(&value) || value != original {
-            t.Errorf("ParseScalar(%v): expected false and unchanged value, got %v", original, value)
-        }
-    }
-}
-
-func TestHexString(t *testing.T) {
-    for _, bits := range test_integer_patterns {
-        text := strconv.FormatUint(bits, 16)
-        if result := UInt64ToHexString(bits); result != text {
-            t.Errorf("UInt64ToHexString(%#x): expected %q, got %q", bits, text, result)
-        }
-        if result, err := HexStringToUInt64(text); err != nil || result != bits {
-            t.Errorf("HexStringToUInt64(%q): expected %#x, got %#x, error %v", text, bits, result, err)
-        }
-        if bits <= uint64(MaxUInt) {
-            if result := UIntToHexString(uint(bits)); result != text {
-                t.Errorf("UIntToHexString(%#x): expected %q, got %q", bits, text, result)
-            }
-            if result, err := HexStringToUInt(text); err != nil || uint64(result) != bits {
-                t.Errorf("HexStringToUInt(%q): expected %#x, got %#x, error %v", text, bits, result, err)
-            }
-        }
-    }
-
-    // One more bit than fits in 64 bit.
-    if result, err := HexStringToUInt64("10000000000000000"); err == nil {
-        t.Errorf("HexStringToUInt64: expected out of range error, got %#x", result)
-    }
-    for _, text := range []string{"", "g", "-1", "0x10", " 1"} {
-        if result, err := HexStringToUInt64(text); err == nil {
-            t.Errorf("HexStringToUInt64(%q): expected error, got %#x", text, result)
-        }
-        if result, err := HexStringToUInt(text); err == nil {
-            t.Errorf("HexStringToUInt(%q): expected error, got %#x", text, result)
+    // Not a string at all (including a pointer to a string).
+    text := "1"
+    for _, value := range []any{1, 1.5, true, nil, &text} {
+        if result, ok := ParseScalar(value); ok || result != nil {
+            t.Errorf("ParseScalar(%v): expected nil, false, got %v (%T), %v", value, result, result, ok)
         }
     }
 }
@@ -646,6 +622,7 @@ func TestCastStringToNumberZeroOnError(t *testing.T) {
     t.Run("to uint16", testStringToNumberZeroOnError[uint16])
     t.Run("to uint32", testStringToNumberZeroOnError[uint32])
     t.Run("to uint64", testStringToNumberZeroOnError[uint64])
+    t.Run("to uintptr", testStringToNumberZeroOnError[uintptr])
     t.Run("to int", testStringToNumberZeroOnError[int])
     t.Run("to int8", testStringToNumberZeroOnError[int8])
     t.Run("to int16", testStringToNumberZeroOnError[int16])
@@ -653,4 +630,220 @@ func TestCastStringToNumberZeroOnError(t *testing.T) {
     t.Run("to int64", testStringToNumberZeroOnError[int64])
     t.Run("to float32", testStringToNumberZeroOnError[float32])
     t.Run("to float64", testStringToNumberZeroOnError[float64])
+}
+
+type derivedInt int
+type derivedUint8 uint8
+type derivedFloat64 float64
+type derivedBool bool
+type derivedString string
+type derivedUintptr uintptr
+
+func TestCastDerived(t *testing.T) {
+    if result, err := Cast[derivedInt, string](42); err != nil || result != "42" {
+        t.Errorf("Cast[derivedInt, string](42): got %q, %v", result, err)
+    }
+    if result, err := Cast[string, derivedInt]("-7"); err != nil || result != -7 {
+        t.Errorf("Cast[string, derivedInt](\"-7\"): got %v, %v", result, err)
+    }
+    if result, err := Cast[derivedInt, derivedString](300); err != nil || result != "300" {
+        t.Errorf("Cast[derivedInt, derivedString](300): got %q, %v", result, err)
+    }
+    if result, err := Cast[derivedFloat64, derivedUint8](255); err != nil || result != 255 {
+        t.Errorf("Cast[derivedFloat64, derivedUint8](255): got %v, %v", result, err)
+    }
+    if result, err := Cast[derivedString, derivedBool]("true"); err != nil || result != true {
+        t.Errorf("Cast[derivedString, derivedBool](\"true\"): got %v, %v", result, err)
+    }
+    if result, err := Cast[derivedInt, int8](300); err == nil || result != 0 {
+        t.Errorf("Cast[derivedInt, int8](300): expected range error and zero, got %v, %v", result, err)
+    }
+    if result, err := Cast[derivedString, derivedInt]("x"); err == nil || result != 0 {
+        t.Errorf("Cast[derivedString, derivedInt](\"x\"): expected parse error and zero, got %v, %v", result, err)
+    }
+    if result, err := Cast[derivedUintptr, derivedString](42); err != nil || result != "42" {
+        t.Errorf("Cast[derivedUintptr, derivedString](42): got %q, %v", result, err)
+    }
+    if result, err := Cast[derivedInt, derivedUintptr](-1); err == nil || result != 0 {
+        t.Errorf("Cast[derivedInt, derivedUintptr](-1): expected range error and zero, got %v, %v", result, err)
+    }
+}
+
+func TestCastDoesNotAllocate(t *testing.T) {
+    value := 1000
+    if allocs := testing.AllocsPerRun(100, func() { _, _ = Cast[int, int64](value) }); allocs != 0 {
+        t.Errorf("Cast[int, int64]: expected 0 allocations, got %v", allocs)
+    }
+    derived := derivedInt(1000)
+    if allocs := testing.AllocsPerRun(100, func() { _, _ = Cast[derivedInt, derivedFloat64](derived) }); allocs != 0 {
+        t.Errorf("Cast[derivedInt, derivedFloat64]: expected 0 allocations, got %v", allocs)
+    }
+    if allocs := testing.AllocsPerRun(100, func() { _, _ = Cast[derivedInt, derivedInt](derived) }); allocs != 0 {
+        t.Errorf("Cast[derivedInt, derivedInt]: expected 0 allocations, got %v", allocs)
+    }
+}
+
+func TestErrors(t *testing.T) {
+    check := func(name string, err error, targets ...error) {
+        t.Helper()
+        for _, target := range targets {
+            if !errors.Is(err, target) {
+                t.Errorf("%s: expected errors.Is(err, %v), got %v", name, target, err)
+            }
+        }
+    }
+
+    _, err := Cast[int, int8](300)
+    check("Cast[int, int8](300)", err, ErrOutOfRange)
+    _, err = Cast[int8, uint64](-1)
+    check("Cast[int8, uint64](-1)", err, ErrOutOfRange)
+    _, err = Cast[float64, int](math.NaN())
+    check("Cast[float64, int](NaN)", err, ErrOutOfRange)
+    _, err = Cast[float64, float32](1e300)
+    check("Cast[float64, float32](1e300)", err, ErrOutOfRange)
+    _, err = Cast[derivedInt, int8](300)
+    check("Cast[derivedInt, int8](300)", err, ErrOutOfRange)
+
+    _, err = Cast[string, int8]("300")
+    check(`Cast[string, int8]("300")`, err, ErrOutOfRange, strconv.ErrRange)
+    _, err = Cast[string, int]("x")
+    check(`Cast[string, int]("x")`, err, ErrInvalidSyntax, strconv.ErrSyntax)
+    _, err = Cast[string, bool]("x")
+    check(`Cast[string, bool]("x")`, err, ErrInvalidSyntax)
+    _, err = Cast[derivedString, derivedInt]("x")
+    check(`Cast[derivedString, derivedInt]("x")`, err, ErrInvalidSyntax)
+
+    _, err = Cast[int, uintptr](-1)
+    check("Cast[int, uintptr](-1)", err, ErrOutOfRange)
+    _, err = Cast[string, uintptr]("-1")
+    check(`Cast[string, uintptr]("-1")`, err, ErrInvalidSyntax)
+
+    if _, err = Cast[int, int8](300); err.Error() != "value out of range: 300 is not in allowed range < -128 ... 127 >" {
+        t.Errorf("unexpected message: %q", err.Error())
+    }
+    if _, err = Cast[string, int8]("300"); err.Error() != `strconv.ParseInt: parsing "300": value out of range` {
+        t.Errorf("unexpected message: %q", err.Error())
+    }
+}
+
+// Types with their own text representation
+
+type testColor int
+
+func (c testColor) String() string {
+    switch c {
+    case 1:
+        return "red"
+    case 2:
+        return "green"
+    }
+    return "unknown"
+}
+
+type testLevel uint8
+
+func (l testLevel) MarshalText() ([]byte, error) {
+    if l > 2 {
+        return nil, errors.New("invalid level")
+    }
+    return []byte([]string{"low", "mid", "high"}[l]), nil
+}
+
+func (l *testLevel) UnmarshalText(text []byte) error {
+    for i, name := range []string{"low", "mid", "high"} {
+        if string(text) == name {
+            *l = testLevel(i)
+            return nil
+        }
+    }
+    return errors.New("unknown level " + strconv.Quote(string(text)))
+}
+
+func TestCastText(t *testing.T) {
+    if result, err := Cast[testColor, string](2); err != nil || result != "green" {
+        t.Errorf("Cast[testColor, string](2): got %q, %v", result, err)
+    }
+    if result, err := Cast[testColor, derivedString](1); err != nil || result != "red" {
+        t.Errorf("Cast[testColor, derivedString](1): got %q, %v", result, err)
+    }
+    if result, err := Cast[testColor, int](2); err != nil || result != 2 {
+        t.Errorf("Cast[testColor, int](2): got %v, %v", result, err)
+    }
+
+    if result, err := Cast[testLevel, string](2); err != nil || result != "high" {
+        t.Errorf("Cast[testLevel, string](2): got %q, %v", result, err)
+    }
+    if result, err := Cast[testLevel, string](7); err == nil || result != "" {
+        t.Errorf("Cast[testLevel, string](7): expected error and empty result, got %q, %v", result, err)
+    }
+    if result, err := Cast[string, testLevel]("mid"); err != nil || result != 1 {
+        t.Errorf(`Cast[string, testLevel]("mid"): got %v, %v`, result, err)
+    }
+    if result, err := Cast[derivedString, testLevel]("high"); err != nil || result != 2 {
+        t.Errorf(`Cast[derivedString, testLevel]("high"): got %v, %v`, result, err)
+    }
+    if result, err := Cast[string, testLevel]("x"); !errors.Is(err, ErrInvalidSyntax) || result != 0 {
+        t.Errorf(`Cast[string, testLevel]("x"): expected ErrInvalidSyntax and zero, got %v, %v`, result, err)
+    }
+
+    if result, err := Cast[time.Duration, string](1500 * time.Millisecond); err != nil || result != "1.5s" {
+        t.Errorf("Cast[time.Duration, string](1.5s): got %q, %v", result, err)
+    }
+    if result, err := Cast[string, time.Duration]("1h30m"); err != nil || result != 90*time.Minute {
+        t.Errorf(`Cast[string, time.Duration]("1h30m"): got %v, %v`, result, err)
+    }
+    if result, err := Cast[string, time.Duration]("5"); !errors.Is(err, ErrInvalidSyntax) || result != 0 {
+        t.Errorf(`Cast[string, time.Duration]("5"): expected ErrInvalidSyntax and zero, got %v, %v`, result, err)
+    }
+    if result, err := Cast[int64, time.Duration](5); err != nil || result != 5 {
+        t.Errorf("Cast[int64, time.Duration](5): got %v, %v", result, err)
+    }
+}
+
+func TestCastSameType(t *testing.T) {
+    if result, err := Cast[derivedInt, derivedInt](-7); err != nil || result != -7 {
+        t.Errorf("Cast[derivedInt, derivedInt](-7): got %v, %v", result, err)
+    }
+    if result, err := Cast[testColor, testColor](2); err != nil || result != 2 {
+        t.Errorf("Cast[testColor, testColor](2): got %v, %v", result, err)
+    }
+    if result, err := Cast[derivedFloat64, derivedFloat64](derivedFloat64(math.Inf(1))); err != nil || !math.IsInf(float64(result), 1) {
+        t.Errorf("Cast[derivedFloat64, derivedFloat64](+Inf): got %v, %v", result, err)
+    }
+}
+
+func TestCastFloatFormat(t *testing.T) {
+    if result, err := Cast[float64, string](1e21); err != nil || result != "1e+21" {
+        t.Errorf("Cast[float64, string](1e21): got %q, %v", result, err)
+    }
+    if result, err := Cast[float32, string](1.5e-7); err != nil || result != "1.5e-07" {
+        t.Errorf("Cast[float32, string](1.5e-7): got %q, %v", result, err)
+    }
+}
+
+// The exported non-generic functions must return the same as Cast.
+func checkDirect[T Castable, TT Castable](t *testing.T, name string, direct func(T) (TT, error), values ...T) {
+    t.Helper()
+    for _, value := range values {
+        direct_result, direct_err := direct(value)
+        cast_result, cast_err := Cast[T, TT](value)
+        if direct_result != cast_result || (direct_err == nil) != (cast_err == nil) {
+            t.Errorf("%s(%v): got %v, %v; Cast gives %v, %v", name, value, direct_result, direct_err, cast_result, cast_err)
+        }
+    }
+}
+
+func TestDirectFunctions(t *testing.T) {
+    checkDirect(t, "Int8ToUInt64", Int8ToUInt64, -128, -1, 0, 1, 127)
+    checkDirect(t, "Int64ToInt8", Int64ToInt8, math.MinInt64, -129, -128, 0, 127, 128, math.MaxInt64)
+    checkDirect(t, "UInt64ToInt64", UInt64ToInt64, 0, math.MaxInt64, math.MaxInt64+1, math.MaxUint64)
+    checkDirect(t, "IntToUIntPtr", IntToUIntPtr, -1, 0, math.MaxInt)
+    checkDirect(t, "Float64ToInt", Float64ToInt, math.NaN(), math.Inf(1), -0.5, 2.9, 0x1p63, -0x1p63)
+    checkDirect(t, "Float64ToFloat32", Float64ToFloat32, math.Inf(-1), 1e300, 3.4e38, 1.5)
+    checkDirect(t, "Float32ToFloat64", Float32ToFloat64, 1.5, float32(math.Inf(1)))
+    checkDirect(t, "BoolToFloat64", BoolToFloat64, true, false)
+    checkDirect(t, "Int32ToBool", Int32ToBool, -1, 0, 7)
+    checkDirect(t, "BoolToString", BoolToString, true, false)
+    checkDirect(t, "StringToUInt8", StringToUInt8, "0", "255", "256", "-1", "x")
+    checkDirect(t, "Float32ToString", Float32ToString, 1.5e-7, 1e21)
 }
