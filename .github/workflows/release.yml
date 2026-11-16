@@ -13,7 +13,7 @@ jobs:
             GOWORK: "off"
             TAG: ${{ github.ref_name }}
         steps:
-            - uses: actions/checkout@v4
+            - uses: actions/checkout@v7
               with:
                   fetch-depth: 0
             - name: Rozebrat a zkontrolovat tag
@@ -43,7 +43,7 @@ jobs:
                       echo "PREVIOUS_TAG=$PREVIOUS_TAG"
                   } >> "$GITHUB_ENV"
                   echo "Modul $MODULE, verze $VERSION, předchozí tag: ${PREVIOUS_TAG:-žádný}"
-            - uses: actions/setup-go@v5
+            - uses: actions/setup-go@v7
               with:
                   go-version-file: ${{ env.MODULE_DIR }}/go.mod
             - name: Testy

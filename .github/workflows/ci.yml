@@ -14,7 +14,7 @@ jobs:
         outputs:
             dirs: ${{ steps.find.outputs.dirs }}
         steps:
-            - uses: actions/checkout@v4
+            - uses: actions/checkout@v7
             - id: find
               name: Najít moduly
               run: |
@@ -40,8 +40,8 @@ jobs:
             run:
                 working-directory: ${{ matrix.dir }}
         steps:
-            - uses: actions/checkout@v4
-            - uses: actions/setup-go@v5
+            - uses: actions/checkout@v7
+            - uses: actions/setup-go@v7
               with:
                   go-version-file: ${{ matrix.dir }}/go.mod
             - name: Vygenerované soubory jsou aktuální
