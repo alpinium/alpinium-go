@@ -1,4 +1,4 @@
-package Cast
+package cast
 
 // Reference implementation and the shared check for the generated test cast_switch_test.go.
 //

@@ -1,8 +1,8 @@
-// Package Cast converts values between the basic types bool, all integers, float32, float64 and
+// Package cast converts values between the basic types bool, all integers, float32, float64 and
 // string, and types derived from them (e.g. type MyInt int). The main function is Cast: a value
 // that does not fit into the destination type returns ErrOutOfRange, a string that cannot be
-// parsed ErrInvalidSyntax. The package assumes a 64-bit platform (see Platform64.go).
-package Cast
+// parsed ErrInvalidSyntax. The package assumes a 64-bit platform (see platform64.go).
+package cast
 
 import (
     "errors"
@@ -64,7 +64,7 @@ const MinFloat64ForInt64  float64 = -0x1p+63               // 0x8000000000000000
 const MaxFloat64ForInt64  float64 =  0x1.fffffffffffffp+62 // 0x7FFFFFFFFFFFFC00  9223372036854774784
 
 // Errors returned by the conversion functions. Test for them with errors.Is,
-// e.g. errors.Is(err, Cast.ErrOutOfRange).
+// e.g. errors.Is(err, cast.ErrOutOfRange).
 // ErrOutOfRange: the value does not fit into the destination type or the allowed range.
 var ErrOutOfRange = errors.New("value out of range")
 // ErrInvalidSyntax: the string is not a valid representation of the destination type.

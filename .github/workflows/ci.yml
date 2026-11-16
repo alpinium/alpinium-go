@@ -8,7 +8,7 @@ on:
 permissions:
     contents: read
 jobs:
-    # Finds the modules: the directories with go.mod, as a JSON list for the matrix, e.g. ["Cast"].
+    # Finds the modules: the directories with go.mod, as a JSON list for the matrix, e.g. ["cast"].
     modules:
         runs-on: ubuntu-latest
         outputs:

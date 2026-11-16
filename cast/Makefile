@@ -1,15 +1,15 @@
-# Makefile of the Cast package.
+# Makefile of the cast package.
 #
 #   make            same as make build
 #   make build      checks (go vet) and builds the package
 #   make generate   regenerates cast_switch.go and cast_switch_test.go from cast_gen.go
-#   make test       builds the test binary Cast.test and runs it
+#   make test       builds the test binary cast.test and runs it
 #   make clean      removes the test binary and the cached test results (go clean -testcache)
 #
 # Recipes are written on the same line as the target (after ";"), so the Makefile needs no tabs.
 
 GO       ?= go
-TEST_BIN := Cast.test
+TEST_BIN := cast.test
 
 .PHONY: all build generate test clean
 

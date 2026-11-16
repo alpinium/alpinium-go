@@ -1,4 +1,4 @@
-# Release of one module, started by pushing a tag <directory>/vX.Y.Z, e.g. Cast/v0.2.0.
+# Release of one module, started by pushing a tag <directory>/vX.Y.Z, e.g. cast/v0.2.0.
 name: Release
 on:
     push:

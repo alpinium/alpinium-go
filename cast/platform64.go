@@ -1,4 +1,4 @@
-package Cast
+package cast
 
 import "unsafe"
 
