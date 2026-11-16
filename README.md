@@ -35,9 +35,15 @@ git push origin Cast/v0.2.0
 
 The `Release` workflow (`.github/workflows/release.yml`) runs for every tag
 `<directory>/vX.Y.Z`. It checks the version format and that the tag is on
-`main`, runs `go vet`, `go test -race` and `go mod tidy -diff`, creates a
-GitHub Release (`v0.x` and `-rc` versions are marked as pre-releases) and
-warms up the Go module proxy.
+`main` and that a `v2+` version has the `/vN` suffix in the module path, checks
+that the generated files are up to date (`go generate`), runs `go vet`,
+`go test -race` and `go mod tidy -diff`, creates a GitHub Release with the
+changes since the previous release of the same module (`v0.x` and `-rc`
+versions are marked as pre-releases) and warms up the Go module proxy.
+
+The `CI` workflow (`.github/workflows/ci.yml`) runs the same checks for every
+module (every directory with `go.mod`) on each push to `main` and on pull
+requests. A new library is picked up automatically.
 
 Rules ([semver](https://semver.org/)):
 

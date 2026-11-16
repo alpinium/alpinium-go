@@ -1,21 +1,53 @@
+# CI: tests every module (every directory with go.mod) on push to main and on pull requests.
+# A new library needs no change here, it is found automatically.
 name: CI
 on:
-  push:
-    branches: [main]
-  pull_request:
+    push:
+        branches: [main]
+    pull_request:
+permissions:
+    contents: read
 jobs:
-  test:
-    runs-on: ubuntu-latest
-    env:
-      GOWORK: "off"
-    steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-go@v5
-        with:
-          go-version-file: Cast/go.mod
-      - run: go vet ./...
-        working-directory: Cast
-      - run: go test -race -count=1 ./...
-        working-directory: Cast
-      - run: go mod tidy -diff
-        working-directory: Cast
+    # Finds the modules: the directories with go.mod, as a JSON list for the matrix, e.g. ["Cast"].
+    modules:
+        runs-on: ubuntu-latest
+        outputs:
+            dirs: ${{ steps.find.outputs.dirs }}
+        steps:
+            - uses: actions/checkout@v4
+            - id: find
+              name: Najít moduly
+              run: |
+                  DIRS=$(find . -name go.mod -not -path './.git/*' -printf '%h\n' | sed 's|^\./||' | sort | jq -R . | jq -sc .)
+                  echo "Moduly: $DIRS"
+                  [ "$DIRS" != "[]" ] || { echo "Žádný go.mod nenalezen"; exit 1; }
+                  echo "dirs=$DIRS" >> "$GITHUB_OUTPUT"
+
+    # Tests each module separately, a failure of one module does not stop the others.
+    test:
+        needs: modules
+        runs-on: ubuntu-latest
+        strategy:
+            fail-fast: false
+            matrix:
+                dir: ${{ fromJSON(needs.modules.outputs.dirs) }}
+        name: test ${{ matrix.dir }}
+        env:
+            # Modules are tested as users get them: dependencies on other modules of this
+            # repository come from their released versions, not from the working tree.
+            GOWORK: "off"
+        defaults:
+            run:
+                working-directory: ${{ matrix.dir }}
+        steps:
+            - uses: actions/checkout@v4
+            - uses: actions/setup-go@v5
+              with:
+                  go-version-file: ${{ matrix.dir }}/go.mod
+            - name: Vygenerované soubory jsou aktuální
+              run: |
+                  go generate ./...
+                  git diff --exit-code -- . || { echo "Spusť go generate ./... v $PWD a commitni výsledek"; exit 1; }
+            - run: go vet ./...
+            - run: go test -race -count=1 ./...
+            - run: go mod tidy -diff
